@@ -2,6 +2,10 @@
 
 Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
 
+## Screenshot
+
+ ![Screenshot](oil-git-screenshot.png)
+
 ## Features
 
 - 🎨 **File name highlighting** - Colors files based on git status
