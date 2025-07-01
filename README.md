@@ -16,32 +16,60 @@ Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that
 
 ## Installation
 
-### With LazyVim
+### With LazyVim/lazy.nvim (No setup required!)
 
 ```lua
-return {
+{
   "benomahony/oil-git.nvim",
   dependencies = { "stevearc/oil.nvim" },
-  opts = {}
+  -- No opts or config needed! Works automatically
+}
+```
+
+### Optional configuration
+
+```lua
+{
+  "benomahony/oil-git.nvim",
+  dependencies = { "stevearc/oil.nvim" },
+  opts = {
+    highlights = {
+      OilGitModified = { fg = "#ff0000" }, -- Custom colors
+    }
+  }
 }
 ```
 
 ### With other plugin managers
 
 ```lua
--- Packer
+-- Packer (no setup required)
 use {
   "benomahony/oil-git.nvim",
   requires = { "stevearc/oil.nvim" },
-  config = function()
-    require("oil-git").setup()
-  end
 }
 
--- Plug
+-- Plug (no setup required)
 Plug 'stevearc/oil.nvim'
 Plug 'benomahony/oil-git.nvim'
 ```
+
+## Colorscheme Integration
+
+The plugin respects highlight groups defined in your colorscheme. Add these to your colorscheme or init.lua:
+
+```lua
+-- Example: Custom colors in your colorscheme
+vim.cmd([[
+  highlight OilGitAdded guifg=#00ff00
+  highlight OilGitModified guifg=#ffff00  
+  highlight OilGitRenamed guifg=#ff00ff
+  highlight OilGitUntracked guifg=#00ffff
+  highlight OilGitIgnored guifg=#808080
+]])
+```
+
+The plugin only sets default colors if highlight groups don't already exist.
 
 ## Configuration
 

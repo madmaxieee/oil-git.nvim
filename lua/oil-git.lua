@@ -1,7 +1,7 @@
 local M = {}
 
--- Git status highlights
-local highlights = {
+-- Default highlight colors (only used if not already defined)
+local default_highlights = {
 	OilGitAdded = { fg = "#a6e3a1" },
 	OilGitModified = { fg = "#f9e2af" },
 	OilGitRenamed = { fg = "#cba6f7" },
@@ -10,8 +10,11 @@ local highlights = {
 }
 
 local function setup_highlights()
-	for name, opts in pairs(highlights) do
-		vim.api.nvim_set_hl(0, name, opts)
+	-- Only set highlight if it doesn't already exist (respects colorscheme)
+	for name, opts in pairs(default_highlights) do
+		if vim.fn.hlexists(name) == 0 then
+			vim.api.nvim_set_hl(0, name, opts)
+		end
 	end
 end
 
@@ -103,7 +106,7 @@ end
 
 local function clear_highlights()
 	-- Clear existing git highlights and virtual text
-	for name, _ in pairs(highlights) do
+	for name, _ in pairs(default_highlights) do
 		vim.fn.clearmatches()
 	end
 
@@ -220,17 +223,38 @@ local function setup_autocmds()
 	})
 end
 
+-- Track if plugin has been initialized
+local initialized = false
+
+local function initialize()
+	if initialized then
+		return
+	end
+	
+	setup_highlights()
+	setup_autocmds()
+	initialized = true
+end
+
 function M.setup(opts)
 	opts = opts or {}
 
-	-- Merge user highlights with defaults
+	-- Merge user highlights with defaults (only affects fallbacks)
 	if opts.highlights then
-		highlights = vim.tbl_extend("force", highlights, opts.highlights)
+		default_highlights = vim.tbl_extend("force", default_highlights, opts.highlights)
 	end
 
-	setup_highlights()
-	setup_autocmds()
+	initialize()
 end
+
+-- Auto-initialize when oil buffer is entered (if not already done)
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = "oil",
+	callback = function()
+		initialize()
+	end,
+	group = vim.api.nvim_create_augroup("OilGitAutoInit", { clear = true }),
+})
 
 -- Manual refresh function
 function M.refresh()
