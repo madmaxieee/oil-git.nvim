@@ -1,13 +1,14 @@
 # oil-git.nvim
 
-Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names.
+Git status integration for [oil.nvim](https://github.com/stevearc/oil.nvim) that shows git status by coloring file names and adding status symbols.
 
 ## Features
 
-- Shows git status by coloring file names in oil.nvim
-- Cached git status calls for performance
-- Automatic refresh on buffer changes
-- Customizable colors
+- 🎨 **File name highlighting** - Colors files based on git status
+- 📝 **Status symbols** - Shows git symbols at end of lines
+- 🚀 **Real-time updates** - Automatically refreshes when git changes occur
+- ⚡ **Performance optimized** - No caching, always fresh git status
+- 🔄 **LazyGit integration** - Updates instantly when closing LazyGit or other git tools
 
 ## Installation
 
@@ -21,16 +22,21 @@ return {
 }
 ```
 
-### With lazy.nvim
+### With other plugin managers
 
 ```lua
-{
+-- Packer
+use {
   "benomahony/oil-git.nvim",
-  dependencies = { "stevearc/oil.nvim" },
+  requires = { "stevearc/oil.nvim" },
   config = function()
     require("oil-git").setup()
   end
 }
+
+-- Plug
+Plug 'stevearc/oil.nvim'
+Plug 'benomahony/oil-git.nvim'
 ```
 
 ## Configuration
@@ -48,14 +54,27 @@ require("oil-git").setup({
 })
 ```
 
-## Git Status Colors
+## Git Status Display
 
-- **Green**: Added files
-- **Yellow**: Modified files
-- **Red**: Deleted files
-- **Purple**: Renamed files
-- **Blue**: Untracked files
-- **Gray**: Ignored files
+| Status | Symbol | Color | Description |
+|--------|---------|-------|-------------|
+| **+** | Added | Green | Staged new file |
+| **~** | Modified | Yellow | Modified file (staged or unstaged) |
+| **-** | Deleted | Red | Deleted file |
+| **→** | Renamed | Purple | Renamed file |
+| **?** | Untracked | Blue | New untracked file |
+| **!** | Ignored | Gray | Ignored file |
+
+## Auto-refresh Triggers
+
+The plugin automatically refreshes git status when:
+
+- Entering an oil buffer
+- Buffer content changes (file operations in oil)
+- Focus returns to Neovim (after using external git tools)
+- Window focus changes
+- Terminal closes (LazyGit, fugitive, etc.)
+- Git plugin events (GitSigns, Fugitive)
 
 ## Commands
 
@@ -66,3 +85,7 @@ require("oil-git").setup({
 - Neovim >= 0.8
 - [oil.nvim](https://github.com/stevearc/oil.nvim)
 - Git
+
+## License
+
+MIT

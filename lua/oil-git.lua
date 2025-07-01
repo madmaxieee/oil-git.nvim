@@ -4,16 +4,10 @@ local M = {}
 local highlights = {
   OilGitAdded = { fg = "#a6e3a1" },
   OilGitModified = { fg = "#f9e2af" },
-  OilGitDeleted = { fg = "#f38ba8" },
   OilGitRenamed = { fg = "#cba6f7" },
   OilGitUntracked = { fg = "#89b4fa" },
   OilGitIgnored = { fg = "#6c7086" },
 }
-
--- Cache for git status to avoid repeated calls
-local status_cache = {}
-local cache_time = 0
-local cache_timeout = 2000 -- 2 seconds
 
 local function setup_highlights()
   for name, opts in pairs(highlights) do
@@ -31,19 +25,12 @@ local function get_git_root(path)
 end
 
 local function get_git_status(dir)
-  local current_time = vim.loop.now()
-
-  -- Check cache
-  if status_cache[dir] and (current_time - cache_time) < cache_timeout then
-    return status_cache[dir]
-  end
-
   local git_root = get_git_root(dir)
   if not git_root then
     return {}
   end
 
-  local cmd = string.format("cd %s && git status --porcelain", vim.fn.shellescape(git_root))
+  local cmd = string.format("cd %s && git status --porcelain --ignored", vim.fn.shellescape(git_root))
   local output = vim.fn.system(cmd)
 
   if vim.v.shell_error ~= 0 then
@@ -56,6 +43,14 @@ local function get_git_status(dir)
       local status_code = line:sub(1, 2)
       local filepath = line:sub(4)
 
+      -- Handle renames (format: "old-name -> new-name")
+      if status_code:sub(1, 1) == "R" then
+        local arrow_pos = filepath:find(" %-> ")
+        if arrow_pos then
+          filepath = filepath:sub(arrow_pos + 4)
+        end
+      end
+
       -- Remove leading "./" if present
       if filepath:sub(1, 2) == "./" then
         filepath = filepath:sub(3)
@@ -67,10 +62,6 @@ local function get_git_status(dir)
       status[abs_path] = status_code
     end
   end
-
-  -- Update cache
-  status_cache[dir] = status
-  cache_time = current_time
 
   return status
 end
@@ -88,8 +79,6 @@ local function get_highlight_group(status_code)
     return "OilGitAdded", "+"
   elseif first_char == "M" then
     return "OilGitModified", "~"
-  elseif first_char == "D" then
-    return "OilGitDeleted", "-"
   elseif first_char == "R" then
     return "OilGitRenamed", "→"
   end
@@ -97,8 +86,6 @@ local function get_highlight_group(status_code)
   -- Check unstaged changes
   if second_char == "M" then
     return "OilGitModified", "~"
-  elseif second_char == "D" then
-    return "OilGitDeleted", "-"
   end
 
   -- Untracked files
@@ -168,39 +155,51 @@ end
 local function setup_autocmds()
   local group = vim.api.nvim_create_augroup("OilGitStatus", { clear = true })
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
+  vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
     pattern = "oil://*",
     callback = function()
-      -- Longer delay to ensure oil has fully rendered
-      vim.defer_fn(apply_git_highlights, 100)
+      vim.schedule(apply_git_highlights)
     end,
   })
 
-  -- Also trigger on oil-specific events if they exist
+  -- Refresh when oil buffer content changes (file operations)
+  vim.api.nvim_create_autocmd({ "BufWritePost", "TextChanged", "TextChangedI" }, {
+    group = group,
+    pattern = "oil://*",
+    callback = function()
+      vim.schedule(apply_git_highlights)
+    end,
+  })
+
+  -- Multiple events to catch lazygit closure
+  vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter", "BufWinEnter" }, {
+    group = group,
+    pattern = "oil://*",
+    callback = function()
+      vim.schedule(apply_git_highlights)
+    end,
+  })
+
+  -- Terminal events (for when lazygit closes)
+  vim.api.nvim_create_autocmd("TermClose", {
+    group = group,
+    callback = function()
+      vim.schedule(function()
+        if vim.bo.filetype == "oil" then
+          apply_git_highlights()
+        end
+      end)
+    end,
+  })
+
+  -- Also catch common git-related user events
   vim.api.nvim_create_autocmd("User", {
     group = group,
-    pattern = "OilEnter",
-    callback = function()
-      vim.defer_fn(apply_git_highlights, 100)
-    end,
-  })
-
-  -- Clear cache when git operations might have occurred
-  vim.api.nvim_create_autocmd("User", {
-    group = group,
-    pattern = "FugitiveChanged",
-    callback = function()
-      status_cache = {}
-    end,
-  })
-
-  -- Also trigger on directory changes within oil
-  vim.api.nvim_create_autocmd("DirChanged", {
-    group = group,
+    pattern = { "FugitiveChanged", "GitSignsUpdate", "LazyGitClosed" },
     callback = function()
       if vim.bo.filetype == "oil" then
-        vim.defer_fn(apply_git_highlights, 100)
+        vim.schedule(apply_git_highlights)
       end
     end,
   })
@@ -220,13 +219,7 @@ end
 
 -- Manual refresh function
 function M.refresh()
-  status_cache = {}
   apply_git_highlights()
-end
-
--- Clear cache function for debugging
-function M.clear_cache()
-  status_cache = {}
 end
 
 return M
