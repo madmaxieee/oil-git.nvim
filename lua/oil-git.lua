@@ -1,5 +1,7 @@
 local M = {}
 
+local ns_id = vim.api.nvim_create_namespace("oil_git_status")
+
 -- Default highlight colors (only used if not already defined)
 local default_highlights = {
 	OilGitAdded = { fg = "#a6e3a1" },
@@ -105,16 +107,12 @@ local function get_highlight_group(status_code)
 end
 
 local function clear_highlights()
-	-- Clear existing git highlights and virtual text
-	for name, _ in pairs(default_highlights) do
-		vim.fn.clearmatches()
-	end
-
-	-- Clear existing virtual text
-	local ns_id = vim.api.nvim_create_namespace("oil_git_status")
 	local bufnr = vim.api.nvim_get_current_buf()
 	vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
 end
+
+local highlight_debounce_timer = vim.uv.new_timer()
+assert(highlight_debounce_timer)
 
 local function apply_git_highlights()
 	local oil = require("oil")
@@ -131,10 +129,16 @@ local function apply_git_highlights()
 		return
 	end
 
-	local bufnr = vim.api.nvim_get_current_buf()
-	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+	if highlight_debounce_timer:is_active() then
+		return
+	end
+	highlight_debounce_timer:stop()
+	highlight_debounce_timer:start(200, 0, function() end)
 
 	clear_highlights()
+
+	local bufnr = vim.api.nvim_get_current_buf()
+	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
 	for i, line in ipairs(lines) do
 		local entry = oil.get_entry_on_line(bufnr, i)
@@ -149,10 +153,12 @@ local function apply_git_highlights()
 				local name_start = line:find(entry.name, 1, true)
 				if name_start then
 					-- Highlight the filename
-					vim.fn.matchaddpos(hl_group, { { i, name_start, #entry.name } })
+					vim.api.nvim_buf_set_extmark(bufnr, ns_id, i - 1, name_start - 1, {
+						end_col = name_start - 1 + #entry.name,
+						hl_group = hl_group,
+					})
 
 					-- Add symbol as virtual text at the end of the line
-					local ns_id = vim.api.nvim_create_namespace("oil_git_status")
 					vim.api.nvim_buf_set_extmark(bufnr, ns_id, i - 1, 0, {
 						virt_text = { { " " .. symbol, hl_group } },
 						virt_text_pos = "eol",
@@ -166,60 +172,17 @@ end
 local function setup_autocmds()
 	local group = vim.api.nvim_create_augroup("OilGitStatus", { clear = true })
 
-	vim.api.nvim_create_autocmd("BufEnter", {
+	vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
 		group = group,
 		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
-	})
-
-	-- Clear highlights when leaving oil buffers
-	vim.api.nvim_create_autocmd("BufLeave", {
-		group = group,
-		pattern = "oil://*",
-		callback = clear_highlights,
+		callback = apply_git_highlights,
 	})
 
 	-- Refresh when oil buffer content changes (file operations)
 	vim.api.nvim_create_autocmd({ "BufWritePost", "TextChanged", "TextChangedI" }, {
 		group = group,
 		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
-	})
-
-	-- Multiple events to catch lazygit closure
-	vim.api.nvim_create_autocmd({ "FocusGained", "WinEnter", "BufWinEnter" }, {
-		group = group,
-		pattern = "oil://*",
-		callback = function()
-			vim.schedule(apply_git_highlights)
-		end,
-	})
-
-	-- Terminal events (for when lazygit closes)
-	vim.api.nvim_create_autocmd("TermClose", {
-		group = group,
-		callback = function()
-			vim.schedule(function()
-				if vim.bo.filetype == "oil" then
-					apply_git_highlights()
-				end
-			end)
-		end,
-	})
-
-	-- Also catch common git-related user events
-	vim.api.nvim_create_autocmd("User", {
-		group = group,
-		pattern = { "FugitiveChanged", "GitSignsUpdate", "LazyGitClosed" },
-		callback = function()
-			if vim.bo.filetype == "oil" then
-				vim.schedule(apply_git_highlights)
-			end
-		end,
+		callback = apply_git_highlights,
 	})
 end
 
@@ -230,7 +193,7 @@ local function initialize()
 	if initialized then
 		return
 	end
-	
+
 	setup_highlights()
 	setup_autocmds()
 	initialized = true
